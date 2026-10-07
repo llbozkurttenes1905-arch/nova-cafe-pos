@@ -14,6 +14,7 @@
 
   <title>NOVA CAFE PREMIUM - Mobil Masa & Adisyon Sistemi</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
@@ -165,7 +166,15 @@
           </div>
         </div>
 
-        <!-- Actions: Install Button & Desktop Tabs -->
+        <!-- Actions: Cloud & Install Buttons & Desktop Tabs -->
+        <div class="flex items-center gap-1.5 sm:gap-2">
+          
+          <!-- Cloud Sync Status Button -->
+          <button onclick="openCloudModal()" id="cloud-status-badge" class="px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold bg-dark-800 hover:bg-dark-750 text-slate-300 border border-white/10 flex items-center gap-1.5 shadow transition active:scale-95 flex-shrink-0">
+            <span id="cloud-status-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+            <span id="cloud-status-text" class="hidden sm:inline text-[11px]">Bulut: Kapalı</span>
+            <span class="sm:hidden text-[11px] font-semibold">Bulut</span>
+          </button>
         <div class="flex items-center gap-2">
           <!-- Install PWA Button -->
           <button onclick="openInstallModal()" class="px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold bg-dark-800 hover:bg-dark-750 text-gold-300 border border-gold-500/30 flex items-center gap-1.5 shadow transition active:scale-95 flex-shrink-0">
@@ -222,6 +231,92 @@
       <span class="text-[10px]">Kasa & Yedek</span>
     </button>
   </nav>
+
+  <!-- Floating Notification Toast -->
+  <div id="cloud-toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-dark-850/95 border border-gold-500/50 text-gold-300 text-xs font-bold shadow-2xl flex items-center gap-2 transform -translate-y-24 opacity-0 pointer-events-none transition-all duration-300">
+    <span id="cloud-toast-icon">🔔</span>
+    <span id="cloud-toast-text">Sipariş güncellendi</span>
+  </div>
+
+  <!-- CLOUD SYNC MODAL -->
+  <div id="cloud-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-dark-850 border border-gold-500/30 rounded-2xl max-w-md w-full p-5 shadow-2xl relative overflow-hidden">
+      <!-- Header -->
+      <div class="flex items-center justify-between pb-3 border-b border-white/10">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-gold-500/10 border border-gold-500/30 flex items-center justify-center text-gold-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 00-9.78 2.096A4.001 4.001 0 003 15z"></path></svg>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider">Canlı Bulut Senkronizasyonu</h3>
+            <p class="text-[10px] text-slate-400">Tüm telefonları anında ortak masalara bağlayın</p>
+          </div>
+        </div>
+        <button onclick="closeCloudModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <!-- Status Banner -->
+      <div id="cloud-modal-status-banner" class="mt-4 p-3 rounded-xl bg-dark-800 border border-white/5 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <span id="cloud-modal-dot" class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
+          <div>
+            <span id="cloud-modal-status-label" class="block text-xs font-bold text-slate-300">Yerel Mod (Bağlantı Yok)</span>
+            <span id="cloud-modal-substatus" class="block text-[10px] text-slate-400">Veriler yalnızca bu telefona kaydediliyor</span>
+          </div>
+        </div>
+        <button id="cloud-toggle-btn" onclick="toggleCloudConnection()" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-gold-500 text-dark-900 hover:bg-gold-400 transition shadow">
+          Bağlan
+        </button>
+      </div>
+
+      <!-- Form Settings -->
+      <div class="mt-4 space-y-3">
+        <!-- Mekan / Oda Kodu -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Mekan Kodu (Ortak Oda)</label>
+          <input type="text" id="cloud-room-input" value="nova-cafe-1905" placeholder="Örn: nova-cafe-1905" class="w-full bg-dark-800 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-gold-500 focus:outline-none tracking-wider font-mono">
+          <p class="text-[10px] text-slate-400 mt-1">Cafedeki tüm telefonlarda aynı kodu yazıp bağlanmalısınız.</p>
+        </div>
+
+        <!-- Cihaz Adı & Rolü -->
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Cihaz İsmi</label>
+            <input type="text" id="cloud-devicename-input" placeholder="Garson 1" class="w-full bg-dark-800 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-gold-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Cihaz Rolü</label>
+            <select id="cloud-role-select" class="w-full bg-dark-800 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-gold-500 focus:outline-none">
+              <option value="waiter">Garson (El Terminali)</option>
+              <option value="cashier">Kasa (Ana Cihaz)</option>
+              <option value="bar">Mutfak / Bar</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Guidance -->
+      <div class="mt-4 p-3 rounded-xl bg-gold-500/10 border border-gold-500/20 text-[11px] text-gold-300 space-y-1">
+        <p class="font-bold flex items-center gap-1.5">
+          <span>⚡</span> Çoklu Telefon Bağlantısı Nasıl Çalışır?
+        </p>
+        <p>• Tüm telefonlarda bu menüden aynı <strong>Mekan Kodu</strong>nu girin ve <strong>Bağlan</strong> butonuna basın.</p>
+        <p>• Garson masaya sipariş eklediğinde, saniyesinde kasadaki ekranda ve diğer telefonlarda güncellenir.</p>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="mt-4 flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+        <button onclick="closeCloudModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-dark-800 transition">
+          Kapat
+        </button>
+        <button onclick="saveAndConnectCloud()" class="px-4 py-2 rounded-xl text-xs font-bold bg-gold-500 hover:bg-gold-400 text-dark-900 transition shadow">
+          Kaydet & Bağlan
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- MAIN WRAPPER -->
   <main class="max-w-7xl mx-auto p-3 sm:p-6 lg:p-8 relative z-10">
@@ -916,6 +1011,304 @@
       openedAt: null
     }));
 
+    
+    // --- REALTIME CLOUD SYNC STATE & ENGINE ---
+    let cloudState = {
+      enabled: JSON.parse(localStorage.getItem("nova_cloud_enabled") || "false"),
+      roomCode: localStorage.getItem("nova_cloud_room") || "nova-cafe-1905",
+      role: localStorage.getItem("nova_cloud_role") || "waiter",
+      deviceName: localStorage.getItem("nova_cloud_devicename") || ("Garson-" + Math.floor(100 + Math.random() * 900)),
+      deviceId: localStorage.getItem("nova_cloud_deviceid") || ("dev_" + Math.random().toString(36).substring(2, 9)),
+      status: "disconnected",
+      client: null,
+      isReceivingRemote: false
+    };
+    localStorage.setItem("nova_cloud_deviceid", cloudState.deviceId);
+    localStorage.setItem("nova_cloud_devicename", cloudState.deviceName);
+
+    function showCloudToast(icon, text) {
+      const toast = document.getElementById("cloud-toast");
+      if (!toast) return;
+      document.getElementById("cloud-toast-icon").innerText = icon;
+      document.getElementById("cloud-toast-text").innerText = text;
+      toast.classList.remove("-translate-y-24", "opacity-0", "pointer-events-none");
+      toast.classList.add("translate-y-0", "opacity-100");
+      setTimeout(() => {
+        toast.classList.add("-translate-y-24", "opacity-0", "pointer-events-none");
+        toast.classList.remove("translate-y-0", "opacity-100");
+      }, 3500);
+    }
+
+    function updateCloudStatusUI() {
+      const dot = document.getElementById("cloud-status-dot");
+      const text = document.getElementById("cloud-status-text");
+      const mDot = document.getElementById("cloud-modal-dot");
+      const mLabel = document.getElementById("cloud-modal-status-label");
+      const mSub = document.getElementById("cloud-modal-substatus");
+      const tBtn = document.getElementById("cloud-toggle-btn");
+
+      if (cloudState.status === "connected") {
+        if (dot) { dot.className = "w-2 h-2 rounded-full bg-emerald-400 animate-pulse"; }
+        if (text) { text.innerText = "Bulut: Canlı"; }
+        if (mDot) { mDot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400"; }
+        if (mLabel) { mLabel.innerText = "Canlı Bulut Bağlı (" + cloudState.roomCode + ")"; mLabel.className = "block text-xs font-bold text-emerald-400"; }
+        if (mSub) { mSub.innerText = "Cihaz: " + cloudState.deviceName + " | Diğer telefonlarla senkronize"; }
+        if (tBtn) { tBtn.innerText = "Bağlantıyı Kes"; tBtn.className = "px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 transition shadow"; }
+      } else if (cloudState.status === "connecting") {
+        if (dot) { dot.className = "w-2 h-2 rounded-full bg-amber-400 animate-ping"; }
+        if (text) { text.innerText = "Bağlanıyor..."; }
+        if (mDot) { mDot.className = "w-2.5 h-2.5 rounded-full bg-amber-400"; }
+        if (mLabel) { mLabel.innerText = "Buluta Bağlanıyor..."; mLabel.className = "block text-xs font-bold text-amber-400"; }
+        if (mSub) { mSub.innerText = "Sunucu ile el sıkışılıyor..."; }
+        if (tBtn) { tBtn.innerText = "İptal"; tBtn.className = "px-3 py-1.5 rounded-xl text-xs font-bold bg-dark-700 text-slate-300 transition"; }
+      } else {
+        if (dot) { dot.className = "w-2 h-2 rounded-full bg-slate-500"; }
+        if (text) { text.innerText = "Bulut: Kapalı"; }
+        if (mDot) { mDot.className = "w-2.5 h-2.5 rounded-full bg-slate-500"; }
+        if (mLabel) { mLabel.innerText = "Yerel Mod (Bağlantı Yok)"; mLabel.className = "block text-xs font-bold text-slate-300"; }
+        if (mSub) { mSub.innerText = "Veriler yalnızca bu telefona kaydediliyor"; }
+        if (tBtn) { tBtn.innerText = "Bağlan"; tBtn.className = "px-3 py-1.5 rounded-xl text-xs font-bold bg-gold-500 text-dark-900 hover:bg-gold-400 transition shadow"; }
+      }
+    }
+
+    function initCloudMQTT() {
+      if (!cloudState.enabled) return;
+      if (typeof mqtt === "undefined") {
+        console.warn("MQTT.js yüklenemedi!");
+        return;
+      }
+      if (cloudState.client) {
+        try { cloudState.client.end(true); } catch(e){}
+      }
+
+      cloudState.status = "connecting";
+      updateCloudStatusUI();
+
+      const brokerUrl = "wss://broker.emqx.io:8084/mqtt";
+      const options = {
+        clientId: "nova_" + cloudState.deviceId + "_" + Math.floor(Math.random()*1000),
+        clean: true,
+        reconnectPeriod: 4000,
+        connectTimeout: 8000,
+        keepalive: 60
+      };
+
+      try {
+        const client = mqtt.connect(brokerUrl, options);
+        cloudState.client = client;
+
+        client.on("connect", () => {
+          cloudState.status = "connected";
+          updateCloudStatusUI();
+          showCloudToast("☁️", "Canlı Bulut Senkronizasyonu Aktif!");
+
+          const syncTopic = "novacafe/" + cloudState.roomCode + "/sync";
+          client.subscribe(syncTopic, { qos: 0 });
+
+          // Request latest state from any host in the room
+          publishCloudEvent("REQUEST_SYNC", {});
+        });
+
+        client.on("message", (topic, payload) => {
+          try {
+            const data = JSON.parse(payload.toString());
+            handleCloudIncomingEvent(data);
+          } catch(e) {
+            console.error("Bulut mesajı okunamadı:", e);
+          }
+        });
+
+        client.on("reconnect", () => {
+          cloudState.status = "connecting";
+          updateCloudStatusUI();
+        });
+
+        client.on("close", () => {
+          if (cloudState.enabled) {
+            cloudState.status = "connecting";
+          } else {
+            cloudState.status = "disconnected";
+          }
+          updateCloudStatusUI();
+        });
+
+        client.on("error", (err) => {
+          console.warn("Bulut bağlantı hatası:", err);
+        });
+      } catch(err) {
+        console.error("MQTT başlatılamadı:", err);
+        cloudState.status = "disconnected";
+        updateCloudStatusUI();
+      }
+    }
+
+    function publishCloudEvent(type, payload) {
+      if (!cloudState.client || cloudState.status !== "connected") return;
+      const syncTopic = "novacafe/" + cloudState.roomCode + "/sync";
+      const message = {
+        type: type,
+        senderId: cloudState.deviceId,
+        senderName: cloudState.deviceName,
+        senderRole: cloudState.role,
+        timestamp: Date.now(),
+        payload: payload
+      };
+      try {
+        cloudState.client.publish(syncTopic, JSON.stringify(message), { qos: 0 });
+      } catch(e) {
+        console.error("Yayın hatası:", e);
+      }
+    }
+
+    function handleCloudIncomingEvent(msg) {
+      // Ignore own broadcast
+      if (msg.senderId === cloudState.deviceId) return;
+
+      cloudState.isReceivingRemote = true;
+
+      try {
+        if (msg.type === "REQUEST_SYNC") {
+          // If we have active tables, share our state with the new phone
+          const hasOrders = state.tables.some(t => t.orders && t.orders.length > 0);
+          if (hasOrders || cloudState.role === "cashier") {
+            publishCloudEvent("FULL_SYNC_RESPONSE", {
+              tables: state.tables,
+              products: state.products
+            });
+          }
+        }
+        else if (msg.type === "FULL_SYNC_RESPONSE") {
+          if (msg.payload && msg.payload.tables) {
+            state.tables = msg.payload.tables;
+            if (msg.payload.products) state.products = msg.payload.products;
+            localStorage.setItem("nova_tables", JSON.stringify(state.tables));
+            localStorage.setItem("nova_products", JSON.stringify(state.products));
+            renderTables();
+            renderMenuTable();
+            updateTopStats();
+            showCloudToast("🔄", msg.senderName + " üzerinden veriler güncellendi!");
+          }
+        }
+        else if (msg.type === "TABLE_UPDATE") {
+          const remoteTable = msg.payload.table;
+          const idx = state.tables.findIndex(t => t.id === remoteTable.id);
+          if (idx !== -1) {
+            state.tables[idx] = remoteTable;
+            localStorage.setItem("nova_tables", JSON.stringify(state.tables));
+            renderTables();
+            updateTopStats();
+
+            // If the user currently has this table open in modal, refresh the order view!
+            if (state.activeTableId === remoteTable.id) {
+              renderTableDetail(remoteTable);
+            }
+
+            playBeep(850, 0.12);
+            showCloudToast("🔔", msg.senderName + ": " + remoteTable.name + " siparişi güncellendi!");
+          }
+        }
+        else if (msg.type === "TABLE_CLOSED") {
+          const tblId = msg.payload.tableId;
+          const tblName = msg.payload.tableName;
+          const idx = state.tables.findIndex(t => t.id === tblId);
+          if (idx !== -1) {
+            state.tables[idx].orders = [];
+            state.tables[idx].note = "";
+            state.tables[idx].openedAt = null;
+            if (msg.payload.historyItem) {
+              state.history.unshift(msg.payload.historyItem);
+              localStorage.setItem("nova_history", JSON.stringify(state.history));
+            }
+            localStorage.setItem("nova_tables", JSON.stringify(state.tables));
+            renderTables();
+            updateTopStats();
+
+            if (state.activeTableId === tblId) {
+              closeOrderModal();
+            }
+
+            playBeep(520, 0.18);
+            showCloudToast("💳", msg.senderName + ": " + tblName + " hesabı kapatıldı!");
+          }
+        }
+        else if (msg.type === "MENU_UPDATE") {
+          if (msg.payload.products) {
+            state.products = msg.payload.products;
+            localStorage.setItem("nova_products", JSON.stringify(state.products));
+            renderMenuTable();
+            if (state.activeTableId) {
+              const activeTbl = state.tables.find(t => t.id === state.activeTableId);
+              if (activeTbl) renderTableDetail(activeTbl);
+            }
+            showCloudToast("📋", msg.senderName + ": Menü fiyatları güncellendi!");
+          }
+        }
+      } finally {
+        cloudState.isReceivingRemote = false;
+      }
+    }
+
+    function openCloudModal() {
+      const roomInput = document.getElementById("cloud-room-input");
+      const nameInput = document.getElementById("cloud-devicename-input");
+      const roleSelect = document.getElementById("cloud-role-select");
+      if (roomInput) roomInput.value = cloudState.roomCode;
+      if (nameInput) nameInput.value = cloudState.deviceName;
+      if (roleSelect) roleSelect.value = cloudState.role;
+      updateCloudStatusUI();
+      const m = document.getElementById("cloud-modal");
+      if (m) {
+        m.classList.remove("hidden");
+        m.classList.add("flex");
+      }
+    }
+
+    function closeCloudModal() {
+      const m = document.getElementById("cloud-modal");
+      if (m) {
+        m.classList.add("hidden");
+        m.classList.remove("flex");
+      }
+    }
+
+    function toggleCloudConnection() {
+      if (cloudState.status === "connected") {
+        cloudState.enabled = false;
+        localStorage.setItem("nova_cloud_enabled", "false");
+        if (cloudState.client) {
+          try { cloudState.client.end(true); } catch(e){}
+        }
+        cloudState.status = "disconnected";
+        updateCloudStatusUI();
+        showCloudToast("⚪", "Bulut bağlantısı kapatıldı (Yerel Mod).");
+      } else {
+        saveAndConnectCloud();
+      }
+    }
+
+    function saveAndConnectCloud() {
+      const roomInput = document.getElementById("cloud-room-input");
+      const nameInput = document.getElementById("cloud-devicename-input");
+      const roleSelect = document.getElementById("cloud-role-select");
+
+      const room = (roomInput ? roomInput.value.trim() : "") || "nova-cafe-1905";
+      const name = (nameInput ? nameInput.value.trim() : "") || ("Garson-" + Math.floor(100 + Math.random() * 900));
+      const role = roleSelect ? roleSelect.value : "waiter";
+
+      cloudState.roomCode = room;
+      cloudState.deviceName = name;
+      cloudState.role = role;
+      cloudState.enabled = true;
+
+      localStorage.setItem("nova_cloud_room", room);
+      localStorage.setItem("nova_cloud_devicename", name);
+      localStorage.setItem("nova_cloud_role", role);
+      localStorage.setItem("nova_cloud_enabled", "true");
+
+      closeCloudModal();
+      initCloudMQTT();
+    }
+
     let state = {
       tables: JSON.parse(localStorage.getItem("nova_tables")) || DEFAULT_TABLES,
       products: JSON.parse(localStorage.getItem("nova_products")) || DEFAULT_PRODUCTS,
@@ -935,6 +1328,13 @@
       localStorage.setItem("nova_products", JSON.stringify(state.products));
       localStorage.setItem("nova_history", JSON.stringify(state.history));
       updateTopStats();
+
+      if (typeof cloudState !== "undefined" && cloudState.enabled && !cloudState.isReceivingRemote) {
+        if (state.activeTableId) {
+          const activeTbl = state.tables.find(t => t.id === state.activeTableId);
+          if (activeTbl) publishCloudEvent("TABLE_UPDATE", { table: activeTbl });
+        }
+      }
     }
 
     function playBeep(freq = 600, duration = 0.08) {
@@ -953,6 +1353,11 @@
     }
 
     document.addEventListener("DOMContentLoaded", () => {
+      if (cloudState.enabled) {
+        setTimeout(initCloudMQTT, 500);
+      } else {
+        updateCloudStatusUI();
+      }
       renderTables();
       renderMenuTable();
       renderHistoryTable();
@@ -1377,6 +1782,10 @@
     }
 
     function saveCurrentTableOrder() {
+      if (state.activeTableId && !cloudState.isReceivingRemote) {
+        const tbl = state.tables.find(t => t.id === state.activeTableId);
+        if (tbl) publishCloudEvent("TABLE_UPDATE", { table: tbl });
+      }
       playBeep(900, 0.08);
       persistState();
       closeTableModal();
@@ -1546,6 +1955,14 @@
 
       persistState();
 
+      if (typeof cloudState !== "undefined" && cloudState.enabled && !cloudState.isReceivingRemote) {
+        publishCloudEvent("TABLE_CLOSED", {
+          tableId: table.id,
+          tableName: table.name,
+          historyRecord: historyRecord
+        });
+      }
+
       closeCheckoutModal();
       closeTableModal();
       renderTables();
@@ -1643,6 +2060,9 @@ Tahsil Edilen: ₺${finalTotal.toFixed(2)} (${state.selectedPaymentMethod})`);
       if (p) {
         p.price = price;
         persistState();
+        if (typeof cloudState !== "undefined" && cloudState.enabled && !cloudState.isReceivingRemote) {
+          publishCloudEvent("MENU_UPDATE", { products: state.products });
+        }
         playBeep(700, 0.04);
       }
     }
@@ -1704,6 +2124,9 @@ Tahsil Edilen: ₺${finalTotal.toFixed(2)} (${state.selectedPaymentMethod})`);
       }
 
       persistState();
+      if (typeof cloudState !== "undefined" && cloudState.enabled && !cloudState.isReceivingRemote) {
+        publishCloudEvent("MENU_UPDATE", { products: state.products });
+      }
       closeProductModal();
       renderMenuTable();
     }
