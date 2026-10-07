@@ -1,7 +1,7 @@
 {
   "name": "Nova Cafe Premium",
   "short_name": "Nova Cafe",
-  "description": "Nova Cafe Premium Masa & Adisyon Yönetim Sistemi",
+  "description": "Nova Cafe Premium Masa ve Adisyon Yonetim Sistemi",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
